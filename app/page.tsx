@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   CirclePlus,
@@ -49,6 +49,7 @@ type ConfirmState =
   | null;
 
 const languageStorageKey = "chip-table-language";
+const autoRefreshIntervalMs = 3000;
 
 function isLanguage(value: string | null): value is Language {
   return value === "zh" || value === "en";
@@ -143,6 +144,7 @@ export default function HomePage() {
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
   const [adminPin, setAdminPin] = useState("");
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const autoRefreshInFlight = useRef(false);
 
   const isBusy = actionKey !== null;
   const t = translations[language];
@@ -194,6 +196,21 @@ export default function HomePage() {
   useEffect(() => {
     void fetchState();
   }, [fetchState]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "hidden" || isBusy || prompt || confirm || autoRefreshInFlight.current) {
+        return;
+      }
+
+      autoRefreshInFlight.current = true;
+      void fetchState(true).finally(() => {
+        autoRefreshInFlight.current = false;
+      });
+    }, autoRefreshIntervalMs);
+
+    return () => window.clearInterval(intervalId);
+  }, [confirm, fetchState, isBusy, prompt]);
 
   const runAction = useCallback(
     async (key: string, callback: () => Promise<void>, successText: string) => {
